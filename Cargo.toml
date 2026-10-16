@@ -1,0 +1,13 @@
+[package]
+name = "vulkan-ash"
+version = "0.1.0"
+authors = ["Daniel Bueno Navarro <danielbuenonavarro@gmail.com>"]
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+ash = "0.27"
+env_logger = "0.11.11"
+log = "0.4.34"
+winapi = "0.3.6"
+winit = "0.18"
