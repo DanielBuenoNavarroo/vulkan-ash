@@ -1,15 +1,10 @@
-use ash::{
-    Device, Entry, Instance,
-    extensions::{ext::DebugUtils, khr::Surface},
-    version::{DeviceV1_0, InstanceV1_0},
-    vk,
-};
+use ash::{Device, Entry, Instance, ext::debug_utils, khr::surface, vk};
 
 pub struct VkContext {
     _entry: Entry,
     instance: Instance,
-    debug_messenger: Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
-    surface: Surface,
+    debug_report_callback: Option<(debug_utils::Instance, vk::DebugUtilsMessengerEXT)>,
+    surface: surface::Instance,
     surface_khr: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
     device: Device,
@@ -20,7 +15,7 @@ impl VkContext {
         &self.instance
     }
 
-    pub fn surface(&self) -> &Surface {
+    pub fn surface(&self) -> &surface::Instance {
         &self.surface
     }
 
@@ -62,22 +57,49 @@ impl VkContext {
                     && props.optimal_tiling_features.contains(features))
         })
     }
+
+    /// Return the maximim sample count supported.
+    pub fn get_max_usable_sample_count(&self) -> vk::SampleCountFlags {
+        let props = unsafe {
+            self.instance
+                .get_physical_device_properties(self.physical_device)
+        };
+        let color_sample_counts = props.limits.framebuffer_color_sample_counts;
+        let depth_sample_counts = props.limits.framebuffer_depth_sample_counts;
+        let sample_counts = color_sample_counts.min(depth_sample_counts);
+
+        if sample_counts.contains(vk::SampleCountFlags::TYPE_64) {
+            vk::SampleCountFlags::TYPE_64
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_32) {
+            vk::SampleCountFlags::TYPE_32
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_16) {
+            vk::SampleCountFlags::TYPE_16
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_8) {
+            vk::SampleCountFlags::TYPE_8
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_4) {
+            vk::SampleCountFlags::TYPE_4
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_2) {
+            vk::SampleCountFlags::TYPE_2
+        } else {
+            vk::SampleCountFlags::TYPE_1
+        }
+    }
 }
 
 impl VkContext {
     pub fn new(
         entry: Entry,
         instance: Instance,
-        debug_messenger: Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
-        surface: Surface,
+        debug_report_callback: Option<(debug_utils::Instance, vk::DebugUtilsMessengerEXT)>,
+        surface: surface::Instance,
         surface_khr: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
         device: Device,
     ) -> Self {
-        Self {
+        VkContext {
             _entry: entry,
             instance,
-            debug_messenger,
+            debug_report_callback,
             surface,
             surface_khr,
             physical_device,
@@ -91,8 +113,8 @@ impl Drop for VkContext {
         unsafe {
             self.device.destroy_device(None);
             self.surface.destroy_surface(self.surface_khr, None);
-            if let Some((report, callback)) = self.debug_messenger.take() {
-                report.destroy_debug_utils_messenger(callback, None);
+            if let Some((utils, messenger)) = self.debug_report_callback.take() {
+                utils.destroy_debug_utils_messenger(messenger, None);
             }
             self.instance.destroy_instance(None);
         }
